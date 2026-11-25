@@ -119,6 +119,14 @@ details{margin-top:28px;background:#fff;border:2px solid var(--line);border-radi
 summary{font-weight:900;cursor:pointer;min-height:28px}
 textarea{width:100%;min-height:90px;font:14px/1.4 monospace;border:2px solid var(--ink);border-radius:10px;padding:8px;margin-top:8px}
 .mini{min-height:44px;padding:0 14px;border-radius:12px;border:2px solid var(--ink);font-weight:900;background:#fff;margin:8px 8px 0 0}
+.gate{position:fixed;inset:0;z-index:50;background:var(--sun);display:none;align-items:center;justify-content:center;padding:20px}
+.gate.on{display:flex}
+.gbox{background:var(--paper);border:4px solid var(--ink);border-radius:24px;box-shadow:0 8px 0 var(--ink);padding:26px 22px;width:min(380px,100%);text-align:center;display:grid;gap:12px}
+.gico{width:72px;height:72px;margin:0 auto}
+.gbox h2{font-size:34px}
+.gbox p{margin:0;font-weight:700}
+#pin{font:400 34px/1 "Lilita One",sans-serif;letter-spacing:.3em;text-align:center;padding:10px;border:3px solid var(--ink);border-radius:14px;width:100%;background:#fff;color:var(--ink)}
+.trailer{background:#c4302b}
 .sync{font-weight:800;font-size:13px}
 .sync::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:#b9ad8a;margin-right:6px}
 .sync[data-ok="1"]::before{background:#21867a}
@@ -155,6 +163,16 @@ textarea{width:100%;min-height:90px;font:14px/1.4 monospace;border:2px solid var
 
 <div class="ov" id="ov" role="dialog" aria-modal="true" aria-labelledby="sTitle"><div class="sheet" id="sheet"></div></div>
 <div class="toast" id="toast" role="status"></div>
+<div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateT">
+  <form class="gbox" id="pinForm">
+    <svg class="gico" aria-hidden="true"><use href="#medal"/></svg>
+    <h2 id="gateT">Álbum Gamer</h2>
+    <p>Digite seu PIN de 6 números para abrir o álbum.</p>
+    <input id="pin" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="one-time-code" aria-label="PIN de 6 números">
+    <button class="big on" type="submit">Entrar</button>
+    <p class="hint" id="pinMsg" role="status"></p>
+  </form>
+</div>
 
 <script>
 {
@@ -258,7 +276,9 @@ const SB='https://rtrthsafzmqueadbxrdv.supabase.co',SBK='sb_publishable_ALhZf-Iu
 const HP=new URLSearchParams(location.hash.slice(1));
 let PKEY=HP.get('k')||'';
 try{if(PKEY)localStorage.setItem(KEY+'-k',PKEY);else PKEY=localStorage.getItem(KEY+'-k')||''}catch(e){}
-const IS_DAD=HP.get('pai')==='1';
+let IS_DAD=HP.get('pai')==='1';
+try{if(IS_DAD)localStorage.setItem(KEY+'-role','pai');else IS_DAD=localStorage.getItem(KEY+'-role')==='pai'}catch(e){}
+if(location.hash){try{history.replaceState(null,'',location.pathname)}catch(e){}}
 let S={g:{},tab:'album',world:'E',age:'all'};
 try{const raw=localStorage.getItem(KEY);if(raw)S=Object.assign(S,JSON.parse(raw))}catch(e){}
 let pending=false,events=[];
@@ -340,7 +360,8 @@ function medalhas(){
   const on=medalsOn(),x=xpOf();
   view.innerHTML=`<div class="stats"><div class="stat"><b>${x}</b><span>XP total</span></div><div class="stat"><b>${tested().length}</b><span>jogos testados</span></div><div class="stat"><b>${GAMES.filter(g=>st(g.id).d).length}</b><span>desafios cumpridos</span></div><div class="stat"><b>${on.length}/${MEDALS.length}</b><span>medalhas</span></div></div><div class="medals">${MEDALS.map(m=>`<div class="medal${on.includes(m[0])?'':' off'}"><svg><use href="#medal"/></svg><h3>${m[0]}</h3><p>${m[1]}</p></div>`).join('')}</div>
   <details><summary>Como ganhar XP</summary><p>Colocar na missão: +5 · Testar: +20 · Primeiro jogo de um mundo: +30 · Cumprir o desafio: +50 · Avaliar: +10</p></details>
-  <details><summary>Guardar o progresso (backup)</summary><p class="hint">O álbum fica salvo neste celular. Para não perder, copie o código e guarde. Para restaurar, cole o código e toque em Restaurar.</p><textarea id="bk" aria-label="Código de backup"></textarea><button class="mini" id="bkCopy">Copiar código</button><button class="mini" id="bkLoad">Restaurar</button><p class="hint" id="bkMsg"></p></details>`;
+  <details><summary>Guardar o progresso (backup)</summary><p class="hint">O álbum fica salvo neste celular. Para não perder, copie o código e guarde. Para restaurar, cole o código e toque em Restaurar.</p><textarea id="bk" aria-label="Código de backup"></textarea><button class="mini" id="bkCopy">Copiar código</button><button class="mini" id="bkLoad">Restaurar</button><p class="hint" id="bkMsg"></p></details>
+  <details><summary>Sair deste celular</summary><p class="hint">Para entrar de novo será preciso o PIN. O progresso continua salvo na nuvem.</p><button class="mini" id="logout">Sair</button></details>`;
   document.getElementById('bk').value=btoa(unescape(encodeURIComponent(JSON.stringify(S.g))));
 }
 const ACT={missao:'colocou na missão',testou:'testou',desafio:'cumpriu o desafio',avaliou:'avaliou',desfez:'desfez'};
@@ -359,6 +380,7 @@ function openSheet(id){
   <button class="big${s.t?' on':''}" data-act="t">${s.t?'Testei! (toque para desfazer)':'Testei! Colar figurinha · +20 XP'}</button>
   <button class="big${s.d?' on':''}" data-act="d" ${s.t?'':'disabled'}>${s.d?'Desafio cumprido! (desfazer)':'Cumpri o desafio · +50 XP'}</button>
   ${s.t?`<p class="hint" style="margin:4px 0 0">O que você achou? · +10 XP</p><div class="rate">${['Amei','Curti','Não curti'].map(r=>`<button data-rate="${r}" aria-pressed="${s.r===r}">${r}</button>`).join('')}</div>`:''}
+  <a class="store trailer" href="https://www.youtube.com/results?search_query=${encodeURIComponent(g.n.replace(/\s*\(.*\)/,'')+' trailer oficial')}" target="_blank" rel="noopener">Assistir ao trailer</a>
   <a class="store" href="https://www.xbox.com/pt-BR/search?q=${encodeURIComponent(g.n.replace(/\s*\(.*\)/,''))}" target="_blank" rel="noopener">Ver no Xbox e no Game Pass</a>
   </div></div>`;
   ov.classList.add('on');sheet.scrollTop=0;sheet.querySelector('.x').focus();
@@ -387,12 +409,28 @@ document.addEventListener('click',e=>{
   if(t.dataset.act&&openId){const k=t.dataset.act,on=!st(openId)[k],names={m:'missao',t:'testou',d:'desafio'};change(()=>{const s=S.g[openId]=Object.assign({},st(openId));s[k]=s[k]?0:1;if(k==='t'&&!s.t){s.d=0;s.r=null}if(k==='t'&&s.t)s.m=1},[openId,on?names[k]:'desfez',on?null:names[k]]);return}
   if(t.dataset.rate&&openId){const v=st(openId).r===t.dataset.rate?null:t.dataset.rate;change(()=>{const s=S.g[openId]=Object.assign({},st(openId));s.r=v},[openId,'avaliou',v||'sem nota']);return}
   if(t.id==='evRefresh'){loadEvents();return}
+  if(t.id==='logout'){try{localStorage.removeItem(KEY+'-k');localStorage.removeItem(KEY+'-role');localStorage.removeItem(KEY)}catch(err){}location.reload();return}
   if(t.id==='bkCopy'){const v=document.getElementById('bk').value;navigator.clipboard?.writeText(v).then(()=>document.getElementById('bkMsg').textContent='Código copiado.').catch(()=>{document.getElementById('bk').select();document.getElementById('bkMsg').textContent='Selecione o código e copie.'});return}
   if(t.id==='bkLoad'){try{const g=JSON.parse(decodeURIComponent(escape(atob(document.getElementById('bk').value.trim()))));if(typeof g!=='object'||!g)throw 0;S.g=g;save();render();say('Álbum restaurado!')}catch(err){document.getElementById('bkMsg').textContent='Código inválido. Confira se copiou inteiro.'}return}
 });
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&ov.classList.contains('on'))closeSheet()});
-if(IS_DAD){const b=document.createElement('button');b.id='t-pai';b.setAttribute('role','tab');b.textContent='Pai';document.querySelector('.tabs').appendChild(b)}
-render();pull().then(()=>{if(IS_DAD)loadEvents()});
+function addDadTab(){if(IS_DAD&&!document.getElementById('t-pai')){const b=document.createElement('button');b.id='t-pai';b.setAttribute('role','tab');b.textContent='Pai';document.querySelector('.tabs').appendChild(b)}}
+const gate=document.getElementById('gate');
+function showGate(){gate.classList.add('on');const i=document.getElementById('pin');i.value='';setTimeout(()=>i.focus(),50)}
+document.getElementById('pinForm').addEventListener('submit',async e=>{
+  e.preventDefault();const i=document.getElementById('pin'),msg=document.getElementById('pinMsg'),pin=i.value.trim();
+  if(!/^\d{6}$/.test(pin)){msg.textContent='O PIN tem 6 números.';return}
+  msg.textContent='Conferindo…';
+  try{const r=await rpc('album_login',{p_pin:pin});
+    if(r&&r.locked){msg.textContent='Muitas tentativas erradas. Espere 15 minutos.';return}
+    if(!r||!r.key){msg.textContent='PIN errado. Tente de novo.';i.value='';return}
+    PKEY=r.key;IS_DAD=r.role==='pai';
+    try{localStorage.setItem(KEY+'-k',PKEY);localStorage.setItem(KEY+'-role',IS_DAD?'pai':'jogador')}catch(err){}
+    gate.classList.remove('on');addDadTab();await pull();if(IS_DAD)loadEvents();say(IS_DAD?'Bem-vindo, pai!':'Bem-vindo, '+(r.name||'jogador')+'!');
+  }catch(err){msg.textContent='Sem conexão. Confira a internet e tente de novo.'}
+});
+addDadTab();render();
+if(PKEY)pull().then(()=>{if(IS_DAD)loadEvents()});else{syncMsg('Entre com o PIN',false);showGate()}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){pull();if(IS_DAD)loadEvents()}});
 }
 </script>
